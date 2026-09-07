@@ -102,15 +102,19 @@ public class SignerTests
     [Fact]
     public void DumpsSignaturesForCastCrossVerification()
     {
-        // The CI + dev flow verifies these with `cast wallet verify`.
-        // Locally: dotnet test --filter CastDump, then run scripts/cast-verify.sh
+        // The CI + dev flow verifies these with `cast wallet verify`:
+        //   dotnet test --filter CastDump
+        //   head -1  "$TMPDIR/unity-sigs.txt"                # the address
+        //   tail -n+2 "$TMPDIR/unity-sigs.txt" | while read sig … cast wallet verify …
+        // Uses the OS temp dir so it works on any runner.
         var key = Environment.GetEnvironmentVariable("AMP_TEST_KEY") ?? CanonicalKey;
         var signer = new AmpPrivateKeySigner(key);
         var lines = new List<string> { signer.GetAddress() };
         for (var i = 0; i < 10; i++)
             lines.Add(signer.SignPersonalSign($"stress-{i}").Result);
-        System.IO.File.WriteAllLines("/tmp/opencode/unity-sigs.txt", lines);
-        Assert.True(System.IO.File.Exists("/tmp/opencode/unity-sigs.txt"));
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "unity-sigs.txt");
+        System.IO.File.WriteAllLines(path, lines);
+        Assert.True(System.IO.File.Exists(path));
     }
 }
 
