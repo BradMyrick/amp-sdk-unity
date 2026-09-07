@@ -1,0 +1,14 @@
+{
+  "name": "Amp.Unity",
+  "rootNamespace": "Amp.Unity",
+  "references": ["Amp.Sdk"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

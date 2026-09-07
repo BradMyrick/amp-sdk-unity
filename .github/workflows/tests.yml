@@ -1,0 +1,15 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  tests:
+    name: Unity API-level compile + unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Runtime against netstandard2.1 (Unity 2021.3+)
+        run: dotnet build Tests~/compilecheck
+      - name: Unit + golden-vector tests (live skipped without AMP_TEST_KEY)
+        run: dotnet test Tests~/AmpUnityTests

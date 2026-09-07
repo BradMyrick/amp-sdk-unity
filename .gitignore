@@ -1,0 +1,6 @@
+Tests~/**/bin/
+Tests~/**/obj/
+*.user
+.DS_Store
+Library/
+Temp/

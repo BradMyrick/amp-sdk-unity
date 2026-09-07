@@ -1,0 +1,14 @@
+{
+  "name": "com.amp.sdk",
+  "version": "0.1.0",
+  "displayName": "AMP — Avalanche Matchmaking",
+  "description": "Ranked matchmaking, skill ratings, parties, staked N-player lobbies, and on-chain settlement. One gasless signature per player; the game never touches crypto complexity.",
+  "unity": "2021.3",
+  "documentationUrl": "https://playwithamp.xyz/docs",
+  "author": {
+    "name": "AMP",
+    "url": "https://playwithamp.xyz"
+  },
+  "license": "Apache-2.0",
+  "keywords": ["networking", "matchmaking", "multiplayer", "web3", "avalanche"]
+}
