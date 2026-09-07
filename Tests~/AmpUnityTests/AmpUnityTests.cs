@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Amp.Sdk;
 using Xunit;
 
@@ -146,7 +147,7 @@ public class LiveIntegration
     }
 
     [Fact]
-    public async void FullLiveFlow()
+    public async Task FullLiveFlow()
     {
         var key = TestKey();
         if (string.IsNullOrEmpty(key)) return; // skip silently

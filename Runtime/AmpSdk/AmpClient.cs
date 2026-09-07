@@ -92,14 +92,23 @@ namespace Amp.Sdk
         {
             var json = await GetAsync("/v1/games");
             var games = new List<AmpGameInfo>();
-            // Minimal array scan: each element is a flat object; extract via
-            // bounded substring search. Full JSON parsing is intentionally
-            // avoided (AOT-safe, zero deps).
-            var idx = 0;
-            while ((idx = json.IndexOf("\"id\":\"", idx, StringComparison.Ordinal)) >= 0)
+            foreach (var raw in AmpJson.GetArrayObjects(json, "games"))
             {
-                var game = ParseGameAt(json, ref idx);
-                if (game != null) games.Add(game);
+                var game = new AmpGameInfo
+                {
+                    Id = AmpJson.GetString(raw, "id") ?? "",
+                    Name = AmpJson.GetString(raw, "name") ?? "",
+                };
+                foreach (var ruleRaw in AmpJson.GetArrayObjects(raw, "rulesets"))
+                {
+                    game.Rulesets.Add(new AmpRuleset
+                    {
+                        Id = AmpJson.GetString(ruleRaw, "id") ?? "",
+                        Name = AmpJson.GetString(ruleRaw, "name") ?? "",
+                        QueueDepth = (int)AmpJson.GetInt(ruleRaw, "queueDepth"),
+                    });
+                }
+                games.Add(game);
             }
             return games;
         }
@@ -156,15 +165,15 @@ namespace Amp.Sdk
             GetAsync($"/v1/matches/history?limit={limit}&offset={offset}");
 
         /// <summary>Report your 1v1 result — auto-signs EIP-191 (gasless).</summary>
-        public Task<string> ReportMatchAsync(string matchId, AmpMatchResult result)
+        public async Task<string> ReportMatchAsync(string matchId, AmpMatchResult result)
         {
             var resultStr = result == AmpMatchResult.Win ? "win"
                           : result == AmpMatchResult.Loss ? "loss" : "draw";
             var signature = _signer != null
-                ? _signer.SignPersonalSign(AmpCrypto.BuildReportMessage(matchId, resultStr)).Result
+                ? await _signer.SignPersonalSign(AmpCrypto.BuildReportMessage(matchId, resultStr))
                 : null;
 
-            return PostAsync($"/v1/matches/{matchId}/report", AmpJson.Build(
+            return await PostAsync($"/v1/matches/{matchId}/report", AmpJson.Build(
                 new Dictionary<string, string> { ["result"] = resultStr, ["signature"] = signature }));
         }
 
@@ -234,13 +243,13 @@ namespace Amp.Sdk
         public Task<string> GetMultiMatchAsync(string matchId) => GetAsync("/v1/multi/" + matchId);
 
         /// <summary>Submit the final ladder (best-first) — auto-signs EIP-712 (gasless).</summary>
-        public Task<string> MultiReportAsync(
+        public async Task<string> MultiReportAsync(
             string matchId, IReadOnlyList<string> rankedWallets,
             string transcriptHash, long sessionNonce)
         {
             var signature = _signer != null
-                ? _signer.SignLadderDigest(AmpCrypto.ComputeLadderDigest(
-                      ChainId, ContractAddress, matchId, rankedWallets, transcriptHash, sessionNonce)).Result
+                ? await _signer.SignLadderDigest(AmpCrypto.ComputeLadderDigest(
+                      ChainId, ContractAddress, matchId, rankedWallets, transcriptHash, sessionNonce))
                 : null;
 
             var sb = new StringBuilder("{\"ranked\":[");
@@ -255,22 +264,22 @@ namespace Amp.Sdk
                 sb.Append(",\"signature\":\"").Append(signature).Append('"');
             sb.Append('}');
 
-            return PostAsync($"/v1/multi/{matchId}/report", sb.ToString());
+            return await PostAsync($"/v1/multi/{matchId}/report", sb.ToString());
         }
 
         public Task<string> MultiClaimAsync(string matchId) =>
             PostAsync($"/v1/multi/{matchId}/claim", "{}");
 
         /// <summary>Submit a death cert on elimination — auto-signs EIP-191.</summary>
-        public Task<string> SubmitExitCertAsync(
+        public async Task<string> SubmitExitCertAsync(
             string matchId, int rank, long exitFrame, string stateHash)
         {
             var signature = _signer != null
-                ? _signer.SignPersonalSign(
-                      AmpCrypto.BuildExitCertMessage(matchId, rank, exitFrame, stateHash)).Result
+                ? await _signer.SignPersonalSign(
+                      AmpCrypto.BuildExitCertMessage(matchId, rank, exitFrame, stateHash))
                 : null;
 
-            return PostAsync($"/v1/multi/{matchId}/exit", AmpJson.Build(
+            return await PostAsync($"/v1/multi/{matchId}/exit", AmpJson.Build(
                 new Dictionary<string, string> { ["stateHash"] = stateHash, ["signature"] = signature },
                 new Dictionary<string, long> { ["rank"] = rank, ["exitFrame"] = exitFrame }));
         }
@@ -326,45 +335,7 @@ namespace Amp.Sdk
             }
         }
 
-        private static AmpGameInfo ParseGameAt(string json, ref int idx)
-        {
-            var game = new AmpGameInfo
-            {
-                Id = ExtractValueAt(json, idx),
-            };
-            var namePos = json.IndexOf("\"name\":\"", idx, StringComparison.Ordinal);
-            game.Name = namePos > 0 ? ExtractValueAt(json, namePos) : null;
 
-            // Rulesets until the next game id or end
-            var nextGame = json.IndexOf("\"id\":\"", idx + 6, StringComparison.Ordinal);
-            var rulesEnd = nextGame > 0 ? nextGame : json.Length;
-            var rPos = namePos > 0 ? namePos : idx;
-            while ((rPos = json.IndexOf("\"id\":\"", rPos, StringComparison.Ordinal)) >= 0 && rPos < rulesEnd)
-            {
-                if (rPos == idx) { rPos += 6; continue; } // the game's own id
-                var rName = json.IndexOf("\"name\":\"", rPos, StringComparison.Ordinal);
-                game.Rulesets.Add(new AmpRuleset
-                {
-                    Id = ExtractValueAt(json, rPos),
-                    Name = rName > 0 && rName < rulesEnd ? ExtractValueAt(json, rName) : null,
-                });
-                rPos += 6;
-            }
-
-            idx += 6;
-            return game;
-        }
-
-        private static string ExtractValueAt(string json, int idQuotePos)
-        {
-            var colon = json.IndexOf(':', idQuotePos);
-            if (colon < 0) return null;
-            var q1 = json.IndexOf('"', colon + 1);
-            if (q1 < 0) return null;
-            var q2 = json.IndexOf('"', q1 + 1);
-            if (q2 < 0) return null;
-            return json.Substring(q1 + 1, q2 - q1 - 1);
-        }
     }
 
     /// <summary>AMP error with machine-readable code.</summary>

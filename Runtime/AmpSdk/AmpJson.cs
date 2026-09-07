@@ -49,7 +49,7 @@ namespace Amp.Sdk
             var colon = json.IndexOf(':', pos);
             if (colon < 0) return null;
             var p = colon + 1;
-            while (p < json.Length && (json[p] == ' ' || json[p] == '\t')) p++;
+            while (p < json.Length && (json[p] == ' ' || json[p] == '\t' || json[p] == '\n' || json[p] == '\r')) p++;
             if (p >= json.Length || json[p] != '"') return null; // null / non-string
             p++;
             var sb = new StringBuilder();
@@ -80,7 +80,7 @@ namespace Amp.Sdk
             var colon = json.IndexOf(':', pos);
             if (colon < 0) return fallback;
             var p = colon + 1;
-            while (p < json.Length && (json[p] == ' ' || json[p] == '\t')) p++;
+            while (p < json.Length && (json[p] == ' ' || json[p] == '\t' || json[p] == '\n' || json[p] == '\r')) p++;
             var start = p;
             while (p < json.Length && (char.IsDigit(json[p]) || json[p] == '-')) p++;
             if (p == start) return fallback;
@@ -94,7 +94,7 @@ namespace Amp.Sdk
             var colon = json.IndexOf(':', pos);
             if (colon < 0) return fallback;
             var p = colon + 1;
-            while (p < json.Length && (json[p] == ' ' || json[p] == '\t')) p++;
+            while (p < json.Length && (json[p] == ' ' || json[p] == '\t' || json[p] == '\n' || json[p] == '\r')) p++;
             var start = p;
             while (p < json.Length && (char.IsDigit(json[p]) || json[p] == '-' || json[p] == '.' || json[p] == 'e' || json[p] == 'E' || json[p] == '+' || json[p] == '-')) p++;
             if (p == start) return fallback;
@@ -109,10 +109,57 @@ namespace Amp.Sdk
             if (colon < 0) return fallback;
             var p = json.IndexOfFirstNonSpace(colon + 1);
             if (p < 0) return fallback;
-            if (json.StartsWith("true", StringComparison.Ordinal)) return true;
             if (p + 5 <= json.Length && json.Substring(p, 5) == "false") return false;
             if (p + 4 <= json.Length && json.Substring(p, 4) == "true") return true;
             return fallback;
+        }
+
+        /// <summary>
+        /// Depth-tracked extraction of top-level objects inside the array at
+        /// `key`. Each element returned raw; nested objects stay inside.
+        /// </summary>
+        public static List<string> GetArrayObjects(string json, string key)
+        {
+            var result = new List<string>();
+            var pos = json.IndexOf("\"" + key + "\"", StringComparison.Ordinal);
+            if (pos < 0) return result;
+            var open = json.IndexOf('[', pos);
+            if (open < 0) return result;
+
+            int depth = 0, objStart = -1, bracket = 0;
+            bool inString = false, escape = false;
+            for (var i = open; i < json.Length; i++)
+            {
+                var c = json[i];
+                if (escape) { escape = false; continue; }
+                if (c == '\\' && inString) { escape = true; continue; }
+                if (c == '"') { inString = !inString; continue; }
+                if (inString) continue;
+                if (c == '{')
+                {
+                    if (depth == 0) objStart = i;
+                    depth++;
+                }
+                else if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0 && objStart >= 0)
+                    {
+                        result.Add(json.Substring(objStart, i - objStart + 1));
+                        objStart = -1;
+                    }
+                }
+                else if (c == '[')
+                {
+                    bracket++;
+                }
+                else if (c == ']')
+                {
+                    bracket--;
+                    if (bracket < 0) break;
+                }
+            }
+            return result;
         }
 
         private static int IndexOfFirstNonSpace(this string s, int from)
