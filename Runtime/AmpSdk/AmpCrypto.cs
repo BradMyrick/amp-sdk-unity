@@ -16,7 +16,7 @@ namespace Amp.Sdk
     {
         public const long DefaultChainId = 43113;
         public const string DefaultContract =
-            "0xcabf7b626172fE55d54f03c346563671AbcC77f7";
+            "0x3BBb1812Ccafc4a8c849BfA340174a271e43B7D1";
 
         /// <summary>Keccak-256 as 0x-hex.</summary>
         public static string KeccakHex(byte[] input)
